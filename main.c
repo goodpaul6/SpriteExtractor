@@ -26,7 +26,7 @@ typedef struct
 typedef struct
 {
     int x, y;
-	int distFromEdge;
+    int distFromEdge;
 } Point;
 
 typedef struct
@@ -41,7 +41,7 @@ typedef struct
 
 static void PrintUsage(const char* app)
 {
-	fprintf(stderr, "Usage: %s path/to/input/image path/to/output/image OPTIONS\n", app);
+    fprintf(stderr, "Usage: %s path/to/input/image path/to/output/image OPTIONS\n", app);
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "\t--frame-width DESIRED_FRAME_WIDTH\n\t\tDesired width of the frames\n");
     fprintf(stderr, "\t--frame-height DESIRED_FRAME_HEIGHT\n\t\tDesired height of the frames\n");
@@ -58,7 +58,7 @@ static bool ParseArgs(Args* args, int argc, char** argv)
         return false;
     }
     
-	args->inputImage = NULL;
+    args->inputImage = NULL;
     args->outputImage = NULL;
     args->fw = 0;
     args->fh = 0;
@@ -84,20 +84,20 @@ static bool ParseArgs(Args* args, int argc, char** argv)
             i += 1;
         } else if(strcmp(argv[i], "--pot") == 0) {
             args->pot = true;
-		} else {
-			if(!args->inputImage) args->inputImage = argv[i];
-			else if (!args->outputImage) args->outputImage = argv[i];
-			else {
-				fprintf(stderr, "Not sure what '%s' is specified for.\n", argv[i]);
-				return false;
-			}
-		}
+    	} else {
+    		if(!args->inputImage) args->inputImage = argv[i];
+    		else if (!args->outputImage) args->outputImage = argv[i];
+    		else {
+    			fprintf(stderr, "Not sure what '%s' is specified for.\n", argv[i]);
+    			return false;
+    		}
+    	}
     }
 
-	if (!args->inputImage) {
-		fprintf(stderr, "Please specify an input image.\n");
-		return false;
-	}
+    if (!args->inputImage) {
+    	fprintf(stderr, "Please specify an input image.\n");
+    	return false;
+    }
 
     if(!args->outputImage) {
         fprintf(stderr, "Please specify an output image.\n");
@@ -129,10 +129,10 @@ static bool ParseArgs(Args* args, int argc, char** argv)
         return false;
     }
 
-	if (args->dw % args->fw != 0) {
-		fprintf(stderr, "Dest width must be a multiple of frame width.\n");
-		return false;
-	}
+    if (args->dw % args->fw != 0) {
+    	fprintf(stderr, "Dest width must be a multiple of frame width.\n");
+    	return false;
+    }
 
     return true;
 }
@@ -155,7 +155,7 @@ int main(int argc, char** argv)
 
     int fw = args.fw;
     int fh = args.fh;
-	int maxDistFromEdge = args.maxDistFromEdge;
+    int maxDistFromEdge = args.maxDistFromEdge;
 
     int w, h, n;
     unsigned char* src = stbi_load(args.inputImage, &w, &h, &n, 4);
@@ -174,7 +174,7 @@ int main(int argc, char** argv)
     int numFrames = 0;
     static Rect frames[MAX_FRAMES];
 
-	bool* checked = calloc(sizeof(bool), w * h);
+    bool* checked = calloc(sizeof(bool), w * h);
 
     for(int y = 0; y < h; ++y) {
         for(int x = 0; x < w; ++x) {
@@ -184,8 +184,8 @@ int main(int argc, char** argv)
                 continue;
             } 
 
-			if (checked[x + y * w]) continue;
-			
+    		if (checked[x + y * w]) continue;
+    		
             // Flood fill to find extents
             int minX = INT_MAX;
             int minY = INT_MAX;
@@ -201,22 +201,22 @@ int main(int argc, char** argv)
                 Point pt = points[numPoints - 1];
                 numPoints -= 1;
 
-				if (pt.x < 0 || pt.y < 0 || pt.x >= w || pt.y >= h) continue;
-				if (checked[pt.x + pt.y * w]) continue;
+    			if (pt.x < 0 || pt.y < 0 || pt.x >= w || pt.y >= h) continue;
+    			if (checked[pt.x + pt.y * w]) continue;
 
                 p = (Pixel*)(&src[(pt.x * 4) + pt.y * (w * 4)]);
 
-				bool isBg = PixelEqual(p, bg);
+    			bool isBg = PixelEqual(p, bg);
                 if(isBg && pt.distFromEdge >= maxDistFromEdge) {
                     continue;
                 }
 
-				int newDistFromEdge = 0;
-				if (isBg) {
-					newDistFromEdge = pt.distFromEdge + 1;
-				}
+    			int newDistFromEdge = 0;
+    			if (isBg) {
+    				newDistFromEdge = pt.distFromEdge + 1;
+    			}
 
-				checked[pt.x + pt.y * w] = true;
+    			checked[pt.x + pt.y * w] = true;
 
                 if(pt.x < minX) {
                     minX = pt.x;
@@ -244,9 +244,9 @@ int main(int argc, char** argv)
 
             Rect r = { minX, minY, maxX - minX + 1, maxY - minY + 1 };
 
-			if (r.w < fw / 4 && r.h < fh / 4) {
-				fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too small so I'm skipping it.\n", r.x, r.y, r.w, r.h);
-			} else if(r.w > fw) {
+    		if (r.w < fw / 4 && r.h < fh / 4) {
+    			fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too small so I'm skipping it.\n", r.x, r.y, r.w, r.h);
+    		} else if(r.w > fw) {
                 fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too large to fit in a single frame so I'm skipping it.\n", r.x, r.y, r.w, r.h);
             } else {
                 assert(numFrames < MAX_FRAMES);
@@ -255,7 +255,7 @@ int main(int argc, char** argv)
         }
     }
 
-	free(checked);
+    free(checked);
  
     int dw;
     int dh;
