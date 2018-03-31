@@ -35,9 +35,13 @@ to the nearest edge is less than or equal to the threshold, then they're incorpo
 ## Examples
 
 I turned this
+
 ![Alt text](example_images/enemies_zelda_src.png?raw=true "Zelda Enemies")
+
 into this
+
 ![Alt text](example_images/enemies_zelda.png?raw=true "Zelda Enemies Cleaned Up")
+
 by doing
 
 ```
@@ -45,9 +49,13 @@ sprite_extractor example_images/enemies_zelda_src.png example_images/enemies_zel
 ```
 
 And this
+
 ![Alt text](example_images/player_zelda_src.png?raw=true "Zelda Player")
+
 into this
+
 ![Alt text](example_images/player_zelda.png?raw=true "Zelda Player Cleaned Up")
+
 by doing
 
 ```
