@@ -1,11 +1,16 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 #define MAX_FRAMES 1024
+#define MAX_POINTS 2048
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 typedef struct
 {
@@ -17,6 +22,11 @@ typedef struct
 {
     unsigned char r, g, b, a;
 } Pixel;
+
+typedef struct
+{
+    int x, y;
+} Point;
 
 static bool PixelEqual(const Pixel* a, const Pixel* b)
 {
@@ -58,71 +68,114 @@ int main(int argc, char** argv)
     int numFrames = 0;
     static Rect frames[MAX_FRAMES];
 
-    for(int i = 0; i < MAX_FRAMES; ++i) {
-        frames[i].x = -1;
-        frames[i].y = -1;
-        frames[i].w = -1;
-        frames[i].h = -1;
-    }
+	bool* checked = calloc(sizeof(bool), w * h);
 
     for(int y = 0; y < h; ++y) {
-        int min = -1;
-        int max = -1;
-
-        int curFrame = 0;
-
         for(int x = 0; x < w; ++x) {
             const Pixel* p = (Pixel*)(&src[x * 4 + y * (w * 4)]);
   
             if(PixelEqual(p, bg)) {
                 continue;
+            } 
+
+			if (checked[x + y * w]) continue;
+			
+            // Flood fill to find extents
+            int minX = INT_MAX;
+            int minY = INT_MAX;
+            int maxX = INT_MIN;
+            int maxY = INT_MIN;
+
+            int numPoints = 0;
+            static Point points[MAX_POINTS]; 
+
+            points[numPoints++] = (Point){ x, y };
+            
+            while(numPoints > 0) {
+                Point pt = points[numPoints - 1];
+                numPoints -= 1;
+
+				if (pt.x < 0 || pt.y < 0 || pt.x >= w || pt.y >= h) continue;
+				if (checked[pt.x + pt.y * w]) continue;
+
+                p = (Pixel*)(&src[(pt.x * 4) + pt.y * (w * 4)]);
+
+                if(PixelEqual(p, bg)) {
+                    continue;
+                }
+
+				checked[pt.x + pt.y * w] = true;
+
+                if(pt.x < minX) {
+                    minX = pt.x;
+                }
+
+                if(pt.y < minY) {
+                    minY = pt.y;
+                }
+                
+                if(pt.x > maxX) {
+                    maxX = pt.x;
+                }
+                
+                if(pt.y > maxY) {
+                    maxY = pt.y;
+                }
+
+                assert(numPoints < MAX_POINTS);
+
+                points[numPoints++] = (Point){pt.x - 1, pt.y};
+                points[numPoints++] = (Point){pt.x, pt.y - 1};
+                points[numPoints++] = (Point){pt.x + 1, pt.y};
+                points[numPoints++] = (Point){pt.x, pt.y + 1};
             }
 
-            if(min < 0) {
-                min = x;
+            Rect r = { minX, minY, maxX - minX + 1, maxY - minY + 1 };
+
+            if(r.w > fw) {
+                fprintf(stderr, "Found rect %d,%d,%d,%d and its too large to fit in a single frame.\n", r.x, r.y, r.w, r.h);
             } else {
-                if(x - min < fw) {
-                    max = x;
-                } else {
-                    // We found a pixel outside of the frame boundaries, so build the frame
-                    Rect* frame = &frames[curFrame];
-
-                    if(frame->x < 0 || min < frame->x) {
-                        frame->x = min;
-                    }
-
-                    if(frame->w < 0 || ((max - frame->x + 1) <= fw && (max - frame->x + 1 > frame->w))) {
-                        frame->w = max - frame->x + 1;
-                    }
-
-                    if(frame->y < 0) {
-                        frame->y = y;
-                    }
-
-                    if(y - frame->y + 1 <= fh) {
-                        frame->h = y - frame->y + 1;
-                    }
-
-                    curFrame += 1;
-                    
-                    if(curFrame > numFrames) {
-                        numFrames = curFrame;
-                    }
-
-                    min = x;
-                    max = -1;
-                }
+                assert(numFrames < MAX_FRAMES);
+                frames[numFrames++] = r;
             }
         }
     }
 
-    stbi_image_free(src);
-    
-    printf("num frames: %d\n", numFrames);
+	free(checked);
+
+    printf("Num frames: %d\n", numFrames);
 
     for(int i = 0; i < numFrames; ++i) {
         printf("%d %d %d %d\n", frames[i].x, frames[i].y, frames[i].w, frames[i].h);
     }
     
+    int dw = numFrames * fw;
+    int dh = fh;
+
+    unsigned char* dest = calloc(4, dw * dh);
+
+    for(int i = 0; i < numFrames; ++i) {
+        Rect r = frames[i];
+
+        int dx = i * fw + fw / 2 - r.w / 2;
+        int dy = fh / 2 - r.h / 2;
+
+        for(int y = 0; y < r.h; ++y) {
+            for(int x = 0; x < r.w; ++x) {
+                Pixel sp = *(Pixel*)(&src[((x + r.x) * 4) + (y + r.y) * (w * 4)]);
+
+                if(PixelEqual(&sp, bg)) continue;
+                
+                *(Pixel*)(&dest[(dx + x) * 4 + (y + dy) * (dw * 4)]) = sp; 
+            }
+        }
+    }
+
+    if(stbi_write_png(argv[2], dw, dh, 4, dest, dw * 4) == 0) {
+        fprintf(stderr, "Failed to write file.\n");
+    } else {
+        printf("Succeeded.\n");
+    }
+
     return 0;
 }
