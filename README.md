@@ -24,13 +24,13 @@ cd Debug
 cmake -G "Makefile" ../.. -DCMAKE_BUILD_TYPE=Debug
 ```
 
+will make a makefile in that directory to build a debug version of the app.
+
 ## Usage
 ```
-sprite_extractor (path to input image) (path to output image) (desired frame width) (desired frame height) (edge distance threshold in pixels)
+sprite_extractor -h
 ```
-
-The edge distance threshold is used to determine whether disconnected pixels still belong to a frame. If the distance from these pixels
-to the nearest edge is less than or equal to the threshold, then they're incorporated.
+Should give you all the usage info.
 
 ## Examples
 
@@ -45,7 +45,7 @@ into this
 by doing
 
 ```
-sprite_extractor example_images/enemies_zelda_src.png example_images/enemies_zelda.png 32 32 5
+sprite_extractor example_images/enemies_zelda_src.png example_images/enemies_zelda.png --frame-width 32 --frame-height 32 -e 5 --dest-width 512
 ```
 
 And this
@@ -59,7 +59,7 @@ into this
 by doing
 
 ```
-sprite_extractor.exe example_images\player_zelda_src.png example_images\player_zelda.png 64 64 2
+sprite_extractor example_images/player_zelda_src.png example_images/player_zelda.png --frame-width 64 --frame-height 64 -e 2 --dest-width 512
 ```
 
 Notice how the "wave arcs" are placed into single frames despite them being separated from each other by a certain amount.

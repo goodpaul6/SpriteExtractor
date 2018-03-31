@@ -29,6 +29,114 @@ typedef struct
 	int distFromEdge;
 } Point;
 
+typedef struct
+{
+    const char* inputImage;
+    const char* outputImage;
+    int fw, fh;
+    int maxDistFromEdge;
+    bool pot;
+    int dw;
+} Args;
+
+static void PrintUsage(const char* app)
+{
+	fprintf(stderr, "Usage: %s path/to/input/image path/to/output/image OPTIONS\n", app);
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "\t--frame-width DESIRED_FRAME_WIDTH\n\t\tDesired width of the frames\n");
+    fprintf(stderr, "\t--frame-height DESIRED_FRAME_HEIGHT\n\t\tDesired height of the frames\n");
+    fprintf(stderr, "\t-e EDGE_DISTANCE_THRESHOLD\n\t\tThe edge distance threshold is used to determine whether disconnected pixels still belong to a frame.\n\t\tIf the distance from these pixels to the nearest edge is less than or equal to the\n\t\tthreshold, then they're incorporated.\n");
+    fprintf(stderr, "\t--pot\n\t\tThis is optional. It makes the app generate a power of two image.\n");
+    fprintf(stderr, "\t--dest-width DESIRED_OUTPUT_IMAGE_WIDTH\n\t\tThis is optional and mutually exclusive with the --pot option.\n\t\tThis is the width you want the output image to be.\n\t\tThe height will be determined from the number of frames detected.\n");
+}
+
+static bool ParseArgs(Args* args, int argc, char** argv)
+{
+    if(argc < 2) {
+        fprintf(stderr, "Not enough arguments.\n");
+        PrintUsage(argv[0]);
+        return false;
+    }
+    
+	args->inputImage = NULL;
+    args->outputImage = NULL;
+    args->fw = 0;
+    args->fh = 0;
+    args->maxDistFromEdge = 0;
+    args->pot = false;
+    args->dw = 0;
+
+    for(int i = 1; i < argc; ++i) {
+        if(strcmp(argv[i], "-h") == 0) {
+            PrintUsage(argv[0]);
+            return false;
+        } else if(strcmp(argv[i], "--frame-width") == 0) {
+            args->fw = atoi(argv[i + 1]);
+            i += 1;
+        } else if(strcmp(argv[i], "--frame-height") == 0) {
+            args->fh = atoi(argv[i + 1]);
+            i += 1;
+        } else if(strcmp(argv[i], "--dest-width") == 0) {
+            args->dw = atoi(argv[i + 1]);
+            i += 1;
+        } else if(strcmp(argv[i], "-e") == 0) {
+            args->maxDistFromEdge = atoi(argv[i + 1]);
+            i += 1;
+        } else if(strcmp(argv[i], "--pot") == 0) {
+            args->pot = true;
+		} else {
+			if(!args->inputImage) args->inputImage = argv[i];
+			else if (!args->outputImage) args->outputImage = argv[i];
+			else {
+				fprintf(stderr, "Not sure what '%s' is specified for.\n", argv[i]);
+				return false;
+			}
+		}
+    }
+
+	if (!args->inputImage) {
+		fprintf(stderr, "Please specify an input image.\n");
+		return false;
+	}
+
+    if(!args->outputImage) {
+        fprintf(stderr, "Please specify an output image.\n");
+        return false;
+    }
+
+    if(args->fw == 0) {
+        fprintf(stderr, "Specify a valid frame width.\n");
+        return false;
+    }
+
+    if(args->fh == 0) {
+        fprintf(stderr, "Specify a valid frame height.");
+        return false;
+    }
+
+    if(args->maxDistFromEdge < 0) {
+        fprintf(stderr, "Please specify a non-negative edge distance.");
+        return false;
+    }
+
+    if(args->pot && args->dw > 0) {
+        fprintf(stderr, "Cannot specify both power of two and destination width.\n");
+        return false;
+    }
+    
+    if(!args->pot && args->dw <= 0) {
+        fprintf(stderr, "Please specify either --pot or --dest-width.\n");
+        return false;
+    }
+
+	if (args->dw % args->fw != 0) {
+		fprintf(stderr, "Dest width must be a multiple of frame width.\n");
+		return false;
+	}
+
+    return true;
+}
+
 static bool PixelEqual(const Pixel* a, const Pixel* b)
 {
     return a->r == b->r &&
@@ -39,30 +147,21 @@ static bool PixelEqual(const Pixel* a, const Pixel* b)
 
 int main(int argc, char** argv)
 {
-    if(argc < 6) {
-        fprintf(stderr, "Usage: %s path/to/image path/to/output_image frame_width frame_height max_dist_from_edge\n", argv[0]);
+    Args args;
+
+    if(!ParseArgs(&args, argc, argv)) {
         return 1;
     }
 
-    int fw = atoi(argv[3]);
-    int fh = atoi(argv[4]);
-	int maxDistFromEdge = atoi(argv[5]);
-
-    if(fw <= 0 || fh <= 0) {
-        fprintf(stderr, "Invalid frame width or frame height.\n");
-        return 1;
-    }
-
-	if (maxDistFromEdge < 0) {
-		fprintf(stderr, "Invalid max dist from edge. It must be non-negative.\n");
-		return 1;
-	}
+    int fw = args.fw;
+    int fh = args.fh;
+	int maxDistFromEdge = args.maxDistFromEdge;
 
     int w, h, n;
-    unsigned char* src = stbi_load(argv[1], &w, &h, &n, 4);
+    unsigned char* src = stbi_load(args.inputImage, &w, &h, &n, 4);
 
     if(!src) {
-        fprintf(stderr, "Failed to load image '%s': %s\n", argv[1], stbi_failure_reason());
+        fprintf(stderr, "Failed to load image '%s': %s\n", args.inputImage, stbi_failure_reason());
         return 1;
     }
     
@@ -157,15 +256,23 @@ int main(int argc, char** argv)
     }
 
 	free(checked);
-
-    int reqArea = numFrames * fw * fh;
-    
-    int dw = fw;
-    int dh = fh;
  
-    while(dw * dh < reqArea) {
-        dw *= 2;
-        dh *= 2;
+    int dw;
+    int dh;
+
+    if(args.pot) {
+        int reqArea = numFrames * fw * fh;
+
+        dw = fw;
+        dh = fh;
+     
+        while(dw * dh < reqArea) {
+            dw *= 2;
+            dh *= 2;
+        }
+    } else {
+        dw = args.dw;
+        dh = ((numFrames * fw) / dw + 1) * fh;
     }
     
     int columns = dw / fw;
