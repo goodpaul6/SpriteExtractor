@@ -2,6 +2,9 @@
 When I'm prototyping games, I avoid spending time on art. I do this by grabbing temporary art assets from the internet.
 However, many of them have inconsistent spacing/padding and are a pain to work with in my engine. This tool fixes that.
 
+## Downloads
+Pre-built binaries are located in the downloads folder.
+
 ## Build
 You can use CMake to build this with whatever you want, which means you'll need CMake.
 
