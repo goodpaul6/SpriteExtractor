@@ -4,7 +4,7 @@
 #include <math.h>
 
 #define MAX_FRAMES 1024
-#define MAX_POINTS 2048
+#define MAX_POINTS 100000
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -26,6 +26,7 @@ typedef struct
 typedef struct
 {
     int x, y;
+	int distFromEdge;
 } Point;
 
 static bool PixelEqual(const Pixel* a, const Pixel* b)
@@ -38,18 +39,24 @@ static bool PixelEqual(const Pixel* a, const Pixel* b)
 
 int main(int argc, char** argv)
 {
-    if(argc < 5) {
-        fprintf(stderr, "Usage: %s path/to/image path/to/output_image frame_width frame_height\n", argv[0]);
+    if(argc < 6) {
+        fprintf(stderr, "Usage: %s path/to/image path/to/output_image frame_width frame_height max_dist_from_edge\n", argv[0]);
         return 1;
     }
 
     int fw = atoi(argv[3]);
     int fh = atoi(argv[4]);
+	int maxDistFromEdge = atoi(argv[5]);
 
     if(fw <= 0 || fh <= 0) {
         fprintf(stderr, "Invalid frame width or frame height.\n");
         return 1;
     }
+
+	if (maxDistFromEdge < 0) {
+		fprintf(stderr, "Invalid max dist from edge. It must be non-negative.\n");
+		return 1;
+	}
 
     int w, h, n;
     unsigned char* src = stbi_load(argv[1], &w, &h, &n, 4);
@@ -89,7 +96,7 @@ int main(int argc, char** argv)
             int numPoints = 0;
             static Point points[MAX_POINTS]; 
 
-            points[numPoints++] = (Point){ x, y };
+            points[numPoints++] = (Point){ x, y, 0 };
             
             while(numPoints > 0) {
                 Point pt = points[numPoints - 1];
@@ -100,9 +107,15 @@ int main(int argc, char** argv)
 
                 p = (Pixel*)(&src[(pt.x * 4) + pt.y * (w * 4)]);
 
-                if(PixelEqual(p, bg)) {
+				bool isBg = PixelEqual(p, bg);
+                if(isBg && pt.distFromEdge >= maxDistFromEdge) {
                     continue;
                 }
+
+				int newDistFromEdge = 0;
+				if (isBg) {
+					newDistFromEdge = pt.distFromEdge + 1;
+				}
 
 				checked[pt.x + pt.y * w] = true;
 
@@ -124,16 +137,18 @@ int main(int argc, char** argv)
 
                 assert(numPoints < MAX_POINTS);
 
-                points[numPoints++] = (Point){pt.x - 1, pt.y};
-                points[numPoints++] = (Point){pt.x, pt.y - 1};
-                points[numPoints++] = (Point){pt.x + 1, pt.y};
-                points[numPoints++] = (Point){pt.x, pt.y + 1};
+                points[numPoints++] = (Point){pt.x - 1, pt.y, newDistFromEdge};
+                points[numPoints++] = (Point){pt.x, pt.y - 1, newDistFromEdge};
+                points[numPoints++] = (Point){pt.x + 1, pt.y, newDistFromEdge};
+                points[numPoints++] = (Point){pt.x, pt.y + 1, newDistFromEdge};
             }
 
             Rect r = { minX, minY, maxX - minX + 1, maxY - minY + 1 };
 
-            if(r.w > fw) {
-                fprintf(stderr, "Found rect %d,%d,%d,%d and its too large to fit in a single frame.\n", r.x, r.y, r.w, r.h);
+			if (r.w < fw / 4 && r.h < fh / 4) {
+				fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too small so I'm skipping it.\n", r.x, r.y, r.w, r.h);
+			} else if(r.w > fw) {
+                fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too large to fit in a single frame so I'm skipping it.\n", r.x, r.y, r.w, r.h);
             } else {
                 assert(numFrames < MAX_FRAMES);
                 frames[numFrames++] = r;
@@ -143,22 +158,25 @@ int main(int argc, char** argv)
 
 	free(checked);
 
-    printf("Num frames: %d\n", numFrames);
-
-    for(int i = 0; i < numFrames; ++i) {
-        printf("%d %d %d %d\n", frames[i].x, frames[i].y, frames[i].w, frames[i].h);
+    int reqArea = numFrames * fw * fh;
+    
+    int dw = fw;
+    int dh = fh;
+ 
+    while(dw * dh < reqArea) {
+        dw *= 2;
+        dh *= 2;
     }
     
-    int dw = numFrames * fw;
-    int dh = fh;
+    int columns = dw / fw;
 
     unsigned char* dest = calloc(4, dw * dh);
 
     for(int i = 0; i < numFrames; ++i) {
         Rect r = frames[i];
 
-        int dx = i * fw + fw / 2 - r.w / 2;
-        int dy = fh / 2 - r.h / 2;
+        int dx = (i % columns) * fw + fw / 2 - r.w / 2;
+        int dy = (i / columns) * fh + fh / 2 - r.h / 2;
 
         for(int y = 0; y < r.h; ++y) {
             for(int x = 0; x < r.w; ++x) {
