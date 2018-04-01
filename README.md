@@ -34,6 +34,7 @@ will make a makefile in that directory to build a debug version of the app.
 sprite_extractor -h
 ```
 Should give you all the usage info.
+Do note that it samples the top-left pixel of the image to determine the "background" color.
 
 ## Examples
 
