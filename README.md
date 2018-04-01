@@ -48,7 +48,7 @@ into this
 by doing
 
 ```
-sprite_extractor example_images/enemies_zelda_src.png example_images/enemies_zelda.png --frame-width 32 --frame-height 32 -e 5 --dest-width 512
+sprite_extractor example_images/enemies_zelda_src.png example_images/enemies_zelda.png --frame-width 32 --frame-height 32 -e 5 --dest-width 512 --row-thresh 4
 ```
 
 And this
@@ -62,7 +62,7 @@ into this
 by doing
 
 ```
-sprite_extractor example_images/player_zelda_src.png example_images/player_zelda.png --frame-width 64 --frame-height 64 -e 2 --dest-width 512
+sprite_extractor example_images/player_zelda_src.png example_images/player_zelda.png --frame-width 64 --frame-height 64 -e 2 --dest-width 512 --row-thresh 4
 ```
 
 Notice how the "wave arcs" are placed into single frames despite them being separated from each other by a certain amount.

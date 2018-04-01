@@ -39,6 +39,8 @@ typedef struct
     int dw;
 } Args;
 
+static int CompareFramesRowThresh;
+
 static void PrintUsage(const char* app)
 {
     fprintf(stderr, "Usage: %s path/to/input/image path/to/output/image OPTIONS\n", app);
@@ -48,6 +50,7 @@ static void PrintUsage(const char* app)
     fprintf(stderr, "\t-e EDGE_DISTANCE_THRESHOLD\n\t\tThe edge distance threshold is used to determine whether disconnected pixels still belong to a frame.\n\t\tIf the distance from these pixels to the nearest edge is less than or equal to the\n\t\tthreshold, then they're incorporated.\n");
     fprintf(stderr, "\t--pot\n\t\tThis is optional. It makes the app generate a power of two image.\n");
     fprintf(stderr, "\t--dest-width DESIRED_OUTPUT_IMAGE_WIDTH\n\t\tThis is optional and mutually exclusive with the --pot option.\n\t\tThis is the width you want the output image to be.\n\t\tThe height will be determined from the number of frames detected.\n");
+	fprintf(stderr, "\t--row-thresh DESIRED_ROW_THRESHOLD\n\t\tThis is equal to half the frame height by default.\n\t\tIt is used to order the resulting frames. If two frames are within the threshold on the y axis\n\t\tthen they are ordered from left-to-right next to each other in the final image.\n");
 }
 
 static bool ParseArgs(Args* args, int argc, char** argv)
@@ -84,7 +87,10 @@ static bool ParseArgs(Args* args, int argc, char** argv)
             i += 1;
         } else if(strcmp(argv[i], "--pot") == 0) {
             args->pot = true;
-    	} else {
+		} else if (strcmp(argv[i], "--row-thresh") == 0) {
+			CompareFramesRowThresh = atoi(argv[i + 1]);
+			i += 1;
+		} else {
     		if(!args->inputImage) args->inputImage = argv[i];
     		else if (!args->outputImage) args->outputImage = argv[i];
     		else {
@@ -134,6 +140,10 @@ static bool ParseArgs(Args* args, int argc, char** argv)
     	return false;
     }
 
+	if (CompareFramesRowThresh == 0) {
+		CompareFramesRowThresh = args->fh / 2;
+	}
+
     return true;
 }
 
@@ -143,6 +153,19 @@ static bool PixelEqual(const Pixel* a, const Pixel* b)
            a->g == b->g &&
            a->b == b->b &&
            a->a == b->a;
+}
+
+static int CompareFrames(const void* va, const void* vb)
+{
+    const Rect* a = va;
+    const Rect* b = vb;
+
+    if(abs(a->y - b->y) < CompareFramesRowThresh) {
+        // They're in the same row, roughly
+        return a->x - b->x;
+    } 
+
+    return a->y - b->y;
 }
 
 int main(int argc, char** argv)
@@ -257,6 +280,8 @@ int main(int argc, char** argv)
 
     free(checked);
  
+    qsort(frames, numFrames, sizeof(Rect), CompareFrames);
+
     int dw;
     int dh;
 
