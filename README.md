@@ -6,9 +6,10 @@ However, many of them have inconsistent spacing/padding and are a pain to work w
 Pre-built binaries are located in the downloads folder.
 
 ## Features
+* Optionally pack sprites tightly and generate appropriate metadata
+* Label each frame with its index for easy visual lookup
+* Process entire directories of images (recursively) all at once
 * Absolutely no dependencies
-* Can optionally pack sprites tightly and generate appropriate metadata
-* Can label each frame with its index for easy visual lookup
 * Only processes/generates 4-component (RGBA) png files. (Yes, this is a feature)
 
 ## Build
@@ -74,3 +75,23 @@ sprite_extractor example_images/player_zelda_src.png example_images/player_zelda
 
 Notice how the "wave arcs" are placed into single frames despite them being separated from each other by a certain amount.
 This occurs because of the edge distance threshold.
+
+I was also able to take these images (see `example_images/npcs`)
+
+![Alt text](example_images/npcs/1.png?raw=true "Zelda NPC")
+![Alt text](example_images/npcs/2.png?raw=true "Zelda NPC")
+![Alt text](example_images/npcs/3.png?raw=true "Zelda NPC")
+![Alt text](example_images/npcs/4.png?raw=true "Zelda NPC")
+![Alt text](example_images/npcs/5.png?raw=true "Zelda NPC")
+
+And make
+
+![Alt text](example_images/npcs_zelda.png?raw=true "Zelda NPC")
+
+by doing
+
+```
+sprite_extractor example_images/npcs --dir example_images/npcs_zelda.png --dest-width 128 --frame-width 32 --frame-height 32 -e 0 --min-width 4 --min-height 4
+```
+
+Notice how some images contained multiple frames and others just one. This is fine, it still detects them as multiple frames even if they're all in the same file, just like it did above.
