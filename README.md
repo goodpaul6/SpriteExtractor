@@ -48,7 +48,7 @@ into this
 by doing
 
 ```
-sprite_extractor example_images/enemies_zelda_src.png example_images/enemies_zelda.png --frame-width 32 --frame-height 32 -e 5 --dest-width 512 --row-thresh 4
+sprite_extractor example_images/enemies_zelda_src.png example_images/enemies_zelda.png --frame-width 32 --frame-height 32 -e 5 --dest-width 512 --row-thresh 16 --min-width 4 --min-height 4
 ```
 
 And this
