@@ -78,10 +78,10 @@ This occurs because of the edge distance threshold.
 
 I was also able to take these images (see `example_images/npcs`)
 
-![Alt text](example_images/npcs/1.png?raw=true "Zelda NPC")
+![Alt text](example_images/npcs/oldman/1.png?raw=true "Zelda NPC")
 ![Alt text](example_images/npcs/2.png?raw=true "Zelda NPC")
 ![Alt text](example_images/npcs/3.png?raw=true "Zelda NPC")
-![Alt text](example_images/npcs/4.png?raw=true "Zelda NPC")
+![Alt text](example_images/npcs/oldman/4.png?raw=true "Zelda NPC")
 ![Alt text](example_images/npcs/5.png?raw=true "Zelda NPC")
 
 And make
