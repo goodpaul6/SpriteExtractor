@@ -94,4 +94,4 @@ by doing
 sprite_extractor example_images/npcs --dir example_images/npcs_zelda.png --dest-width 128 --frame-width 32 --frame-height 32 -e 0 --min-width 4 --min-height 4
 ```
 
-Notice how some images contained multiple frames and others just one. This is fine, it still detects them as multiple frames even if they're all in the same file, just like it did above.
+Notice how some images contained multiple frames and others just one. This is fine, it still detects them as multiple frames even if they're all in the same file, just like it did for the single image examples.
