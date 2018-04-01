@@ -42,7 +42,99 @@ typedef struct
     bool pot;
     int dw;
     int packW, packH;
+	bool label;
 } Args;
+
+static Pixel NumFont[10][3 * 5];
+
+static void GenerateNumFont(Pixel col)
+{
+	static const unsigned char bits[10][3 * 5] =
+	{
+		{
+			1, 1, 1,
+			1, 0, 1,
+			1, 0, 1,
+			1, 0, 1,
+			1, 1, 1
+		},
+		{
+			0, 1, 0,
+			0, 1, 0,
+			0, 1, 0,
+			0, 1, 0,
+			0, 1, 0,	
+		},
+		{
+			1, 1, 1,
+			0, 0, 1,
+			1, 1, 1,
+			1, 0, 0,
+			1, 1, 1
+		},
+		{
+			1, 1, 1,
+			0, 0, 1,
+			1, 1, 1,
+			0, 0, 1,
+			1, 1, 1
+		},
+		{
+			1, 0, 1,
+			1, 0, 1,
+			1, 1, 1,
+			0, 0, 1,
+			0, 0, 1
+		},
+		{
+			1, 1, 1,
+			1, 0, 0,
+			1, 1, 1,
+			0, 0, 1,
+			1, 1, 1
+		},
+		{
+			1, 1, 1,
+			1, 0, 0,
+			1, 1, 1,
+			1, 0, 1,
+			1, 1, 1
+		},
+		{
+			1, 1, 1,
+			0, 0, 1,
+			0, 0, 1,
+			0, 0, 1,
+			0, 0, 1
+		},
+		{
+			1, 1, 1,
+			1, 0, 1,
+			1, 1, 1,
+			1, 0, 1,
+			1, 1, 1
+		},
+		{
+			1, 1, 1,
+			1, 0, 1,
+			1, 1, 1,
+			0, 0, 1,
+			1, 1, 1
+		},
+	};
+
+	for (int i = 0; i < 10; ++i) {
+		for (int y = 0; y < 5; ++y) {
+			for (int x = 0; x < 3; ++x) {
+				if (bits[i][x + y * 3]) {
+					NumFont[i][x + y * 3] = col;
+				} else {
+					NumFont[i][x + y * 3] = (Pixel) { 0 };
+				}
+			}
+		}
+	}
+}
 
 static int CompareFramesRowThresh;
 
@@ -57,6 +149,7 @@ static void PrintUsage(const char* app)
     fprintf(stderr, "\t--pot\n\t\tThis is optional. It makes the app generate a power of two image.\n");
     fprintf(stderr, "\t--dest-width DESIRED_OUTPUT_IMAGE_WIDTH\n\t\tThis is optional and mutually exclusive with the --pot option.\n\t\tThis is the width you want the output image to be.\n\t\tThe height will be determined from the number of frames detected.\n");
 	fprintf(stderr, "\t--row-thresh DESIRED_ROW_THRESHOLD\n\t\tThis is equal to half the frame height by default.\n\t\tIt is used to order the resulting frames. If two frames are within the threshold on the y axis\n\t\tthen they are ordered from left-to-right next to each other in the final image.\n");
+	fprintf(stderr, "\t--label\n\t\tPrints the rectangle indices into the top-left corner of the frames.\n");
     fprintf(stderr, "\t--pack PACKED_IMAGE_WIDTH PACKED_IMAGE_HEIGHT\n\t\tIf this is supplied, then the frames are tightly packed and metadata is generated for each frame.\n");
 }
 
@@ -98,6 +191,8 @@ static bool ParseArgs(Args* args, int argc, char** argv)
             i += 2;
         } else if(strcmp(argv[i], "--pot") == 0) {
             args->pot = true;
+		} else if (strcmp(argv[i], "--label") == 0) {
+			args->label = true;
 		} else if (strcmp(argv[i], "--row-thresh") == 0) {
 			CompareFramesRowThresh = atoi(argv[i + 1]);
 			i += 1;
@@ -177,6 +272,10 @@ static bool ParseArgs(Args* args, int argc, char** argv)
 
 	if (args->minH == 0) {
 		args->minH = args->fh / 4;
+	}
+
+	if (args->label) {
+		GenerateNumFont((Pixel) { 255, 255, 255, 255 });
 	}
 
 	if (CompareFramesRowThresh == 0) {
@@ -321,9 +420,7 @@ int main(int argc, char** argv)
 
     free(checked);
  
-    if(args.packW == 0 && args.packH == 0) {
-        qsort(frames, numFrames, sizeof(Rect), CompareFrames);
-    }
+    qsort(frames, numFrames, sizeof(Rect), CompareFrames);
 
     int dw;
     int dh;
@@ -367,7 +464,42 @@ int main(int argc, char** argv)
 
         free(nodes);
 
-        // Output rectangle metadata
+        // Output rectangle metadata in top-left to bottom-right order
+		char path[512];
+
+		if (strlen(args.outputImage) >= 512) {
+			fprintf(stderr, "Failed; output image path is too long to generate metadata.\n");
+			return 1;
+		}
+
+		strcpy(path, args.outputImage);
+
+		char* ext = strrchr(path, '.');
+
+		if (!ext) {
+			fprintf(stderr, "Failed; missing extension on output image path.\n");
+			return 1;
+		}
+
+		ext[1] = 't';
+		ext[2] = 'x';
+		ext[3] = 't';
+		ext[4] = '\0';
+
+		FILE* file = fopen(path, "w");
+
+		if (!file) {
+			fprintf(stderr, "Failed to open metadata file '%s' for writing.\n", path);
+			return 1;
+		}
+
+		fprintf(file, "%d\n", numFrames);
+
+		for (int i = 0; i < numFrames; ++i) {
+			fprintf(file, "%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+		}
+
+		fclose(file);
     }
     
     unsigned char* dest = calloc(4, dw * dh);
@@ -396,6 +528,25 @@ int main(int argc, char** argv)
                 *(Pixel*)(&dest[(dx + x) * 4 + (y + dy) * (dw * 4)]) = sp; 
             }
         }
+
+		if (args.label) {
+			char num[32];
+			sprintf(num, "%d", i);
+
+			int len = strlen(num);
+
+			for (int i = 0; i < len; ++i) {
+				int digit = num[i] - '0';
+
+				for (int y = 0; y < 5; ++y) {
+					for (int x = 0; x < 3; ++x) {
+						Pixel sp = NumFont[digit][x + y * 3];
+
+						*(Pixel*)(&dest[(dx + x + i * 4) * 4 + (y + dy) * (dw * 4)]) = sp;
+					}
+				}
+			}
+		}
     }
 
     if(stbi_write_png(argv[2], dw, dh, 4, dest, dw * 4) == 0) {
