@@ -43,6 +43,7 @@ typedef struct
     int dw;
     int packW, packH;
 	bool label;
+    bool metadata;
 } Args;
 
 static Pixel NumFont[10][3 * 5];
@@ -150,6 +151,7 @@ static void PrintUsage(const char* app)
     fprintf(stderr, "\t--dest-width DESIRED_OUTPUT_IMAGE_WIDTH\n\t\tThis is optional and mutually exclusive with the --pot option.\n\t\tThis is the width you want the output image to be.\n\t\tThe height will be determined from the number of frames detected.\n");
 	fprintf(stderr, "\t--row-thresh DESIRED_ROW_THRESHOLD\n\t\tThis is equal to half the frame height by default.\n\t\tIt is used to order the resulting frames. If two frames are within the threshold on the y axis\n\t\tthen they are ordered from left-to-right next to each other in the final image.\n");
 	fprintf(stderr, "\t--label\n\t\tPrints the rectangle indices into the top-left corner of the frames.\n");
+	fprintf(stderr, "\t--metadata\n\t\tIf specified, the rectangles are output to a text file in the format mentioned below.\n");
     fprintf(stderr, "\t--pack PACKED_IMAGE_WIDTH PACKED_IMAGE_HEIGHT\n\t\tIf this is supplied, then the frames are tightly packed and metadata is generated for each frame.\n\t\tThe metadata is simply a text file with the number of frames followed by 4 integers\n\t\tfor each frame: x y w h\n");
 }
 
@@ -182,7 +184,9 @@ static bool ParseArgs(Args* args, int argc, char** argv)
 		} else if (strcmp(argv[i], "--dest-width") == 0) {
             args->dw = atoi(argv[i + 1]);
             i += 1;
-        } else if(strcmp(argv[i], "-e") == 0) {
+		} else if (strcmp(argv[i], "--metadata") == 0) {
+			args->metadata = true;
+		} else if (strcmp(argv[i], "-e") == 0) {
             args->maxDistFromEdge = atoi(argv[i + 1]);
             i += 1;
         } else if(strcmp(argv[i], "--pack") == 0) {
@@ -277,6 +281,10 @@ static bool ParseArgs(Args* args, int argc, char** argv)
 	if (args->label) {
 		GenerateNumFont((Pixel) { 255, 255, 255, 255 });
 	}
+
+    if(args->packW > 0 && args->packH > 0) {
+        args->metadata = true;
+    }
 
 	if (CompareFramesRowThresh == 0) {
 		CompareFramesRowThresh = args->fh / 2;
@@ -463,7 +471,8 @@ int main(int argc, char** argv)
         }
 
         free(nodes);
-
+    }
+    if(args.metadata) {
         // Output rectangle metadata in top-left to bottom-right order
 		char path[512];
 
@@ -496,10 +505,15 @@ int main(int argc, char** argv)
 		fprintf(file, "%d\n", numFrames);
 
 		for (int i = 0; i < numFrames; ++i) {
-			fprintf(file, "%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+            if(args.packW > 0 && args.packH > 0) {
+                fprintf(file, "%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+            } else {
+                fprintf(file, "%d %d %d %d\n", frames[i].x, frames[i].y, frames[i].w, frames[i].h);
+            }
 		}
 
 		fclose(file);
+		printf("Successfully wrote metadata to '%s'.\n", path);
     }
     
     unsigned char* dest = calloc(4, dw * dh);
