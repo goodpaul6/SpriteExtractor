@@ -508,7 +508,12 @@ int main(int argc, char** argv)
             if(args.packW > 0 && args.packH > 0) {
                 fprintf(file, "%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
             } else {
-                fprintf(file, "%d %d %d %d\n", frames[i].x, frames[i].y, frames[i].w, frames[i].h);
+				int columns = dw / fw;
+
+				int dx = (i % columns) * fw;
+				int dy = (i / columns) * fh;
+
+                fprintf(file, "%d %d %d %d\n", dx, dy, fw, fh);
             }
 		}
 
