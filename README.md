@@ -5,6 +5,11 @@ However, many of them have inconsistent spacing/padding and are a pain to work w
 ## Downloads
 Pre-built binaries are located in the downloads folder.
 
+## Features
+* Absolutely no dependencies
+* Can optionally pack sprites tightly and generate appropriate metadata
+* Can label each frame with its index for easy visual lookup
+
 ## Build
 You can use CMake to build this with whatever you want, which means you'll need CMake.
 
@@ -58,18 +63,13 @@ And this
 
 into this
 
-![Alt text](example_images/player_zelda.png?raw=true "Zelda Player Cleaned Up")
+![Alt text](example_images/player_zelda_packed.png?raw=true "Zelda Player Cleaned Up")
 
 by doing
 
 ```
-sprite_extractor example_images/player_zelda_src.png example_images/player_zelda.png --frame-width 64 --frame-height 64 -e 2 --dest-width 512 --row-thresh 4
+sprite_extractor example_images/player_zelda_src.png example_images/player_zelda_packed.png --pack 256 128 --frame-width 64 --frame-height 64 -e 2 --min-width 4 --min-height 4 --label --row-thresh 4
 ```
 
 Notice how the "wave arcs" are placed into single frames despite them being separated from each other by a certain amount.
 This occurs because of the edge distance threshold.
-
-## Note
-This does not pack the sprites optimally (or make an effort to do so at all, but I'm working on making that an option).
-This is designed so that the resulting sprite sheets are ready to use as-is, unlike tightly
-packed ones which would likely require generating/parsing a bunch of metadata.
