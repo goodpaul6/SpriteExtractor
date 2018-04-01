@@ -150,7 +150,7 @@ static void PrintUsage(const char* app)
     fprintf(stderr, "\t--dest-width DESIRED_OUTPUT_IMAGE_WIDTH\n\t\tThis is optional and mutually exclusive with the --pot option.\n\t\tThis is the width you want the output image to be.\n\t\tThe height will be determined from the number of frames detected.\n");
 	fprintf(stderr, "\t--row-thresh DESIRED_ROW_THRESHOLD\n\t\tThis is equal to half the frame height by default.\n\t\tIt is used to order the resulting frames. If two frames are within the threshold on the y axis\n\t\tthen they are ordered from left-to-right next to each other in the final image.\n");
 	fprintf(stderr, "\t--label\n\t\tPrints the rectangle indices into the top-left corner of the frames.\n");
-    fprintf(stderr, "\t--pack PACKED_IMAGE_WIDTH PACKED_IMAGE_HEIGHT\n\t\tIf this is supplied, then the frames are tightly packed and metadata is generated for each frame.\n");
+    fprintf(stderr, "\t--pack PACKED_IMAGE_WIDTH PACKED_IMAGE_HEIGHT\n\t\tIf this is supplied, then the frames are tightly packed and metadata is generated for each frame.\n\t\tThe metadata is simply a text file with the number of frames followed by 4 integers\n\t\tfor each frame: x y w h\n");
 }
 
 static bool ParseArgs(Args* args, int argc, char** argv)
