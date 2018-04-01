@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#define MAX_FRAMES 4096
+#define MAX_FRAMES 65536
 #define MAX_POINTS 100000
 
 #define STB_IMAGE_IMPLEMENTATION
