@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#define MAX_FRAMES 1024
+#define MAX_FRAMES 2048
 #define MAX_POINTS 100000
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -11,6 +11,9 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"
 
 typedef struct
 {
@@ -38,6 +41,7 @@ typedef struct
 	int minW, minH;
     bool pot;
     int dw;
+    int packW, packH;
 } Args;
 
 static int CompareFramesRowThresh;
@@ -46,13 +50,14 @@ static void PrintUsage(const char* app)
 {
     fprintf(stderr, "Usage: %s path/to/input/image path/to/output/image OPTIONS\n", app);
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "\t--frame-width DESIRED_FRAME_WIDTH\n\t\tDesired width of the frames\n");
-    fprintf(stderr, "\t--frame-height DESIRED_FRAME_HEIGHT\n\t\tDesired height of the frames\n");
+    fprintf(stderr, "\t--frame-width DESIRED_FRAME_WIDTH\n\t\tDesired width of the frames.\n");
+    fprintf(stderr, "\t--frame-height DESIRED_FRAME_HEIGHT\n\t\tDesired height of the frames.\n");
     fprintf(stderr, "\t-e EDGE_DISTANCE_THRESHOLD\n\t\tThe edge distance threshold is used to determine whether disconnected pixels still belongs to a frame.\n\t\tIf the distance from these pixels to the nearest edge is less than or equal to the\n\t\tthreshold, then they're incorporated.\n");
     fprintf(stderr, "\t--min-width MIN_FRAME_WIDTH\n\t--min-height MIN_FRAME_HEIGHT\n\t\tAll frames smaller than these in both dimensions will be discarded.\n\t\tBy default these are frame width / 4 and frame height / 4.\n");
     fprintf(stderr, "\t--pot\n\t\tThis is optional. It makes the app generate a power of two image.\n");
     fprintf(stderr, "\t--dest-width DESIRED_OUTPUT_IMAGE_WIDTH\n\t\tThis is optional and mutually exclusive with the --pot option.\n\t\tThis is the width you want the output image to be.\n\t\tThe height will be determined from the number of frames detected.\n");
 	fprintf(stderr, "\t--row-thresh DESIRED_ROW_THRESHOLD\n\t\tThis is equal to half the frame height by default.\n\t\tIt is used to order the resulting frames. If two frames are within the threshold on the y axis\n\t\tthen they are ordered from left-to-right next to each other in the final image.\n");
+    fprintf(stderr, "\t--pack PACKED_IMAGE_WIDTH PACKED_IMAGE_HEIGHT\n\t\tIf this is supplied, then the frames are tightly packed and metadata is generated for each frame.\n");
 }
 
 static bool ParseArgs(Args* args, int argc, char** argv)
@@ -63,15 +68,7 @@ static bool ParseArgs(Args* args, int argc, char** argv)
         return false;
     }
     
-    args->inputImage = NULL;
-    args->outputImage = NULL;
-    args->fw = 0;
-    args->fh = 0;
-	args->minW = 0;
-	args->minH = 0;
-    args->maxDistFromEdge = 0;
-    args->pot = false;
-    args->dw = 0;
+	memset(args, 0, sizeof(Args));
 
     for(int i = 1; i < argc; ++i) {
         if(strcmp(argv[i], "-h") == 0) {
@@ -95,6 +92,10 @@ static bool ParseArgs(Args* args, int argc, char** argv)
         } else if(strcmp(argv[i], "-e") == 0) {
             args->maxDistFromEdge = atoi(argv[i + 1]);
             i += 1;
+        } else if(strcmp(argv[i], "--pack") == 0) {
+            args->packW = atoi(argv[i + 1]);
+            args->packH = atoi(argv[i + 2]);
+            i += 2;
         } else if(strcmp(argv[i], "--pot") == 0) {
             args->pot = true;
 		} else if (strcmp(argv[i], "--row-thresh") == 0) {
@@ -119,6 +120,16 @@ static bool ParseArgs(Args* args, int argc, char** argv)
         fprintf(stderr, "Please specify an output image.\n");
         return false;
     }
+    
+    if(args->packW > 0 && args->packH == 0) {
+        fprintf(stderr, "Invalid pack size.\n");
+        return false;
+    }
+
+    if(args->packH > 0 && args->packW == 0) {
+        fprintf(stderr, "Invalid pack size.\n");
+        return false;
+    }
 
     if(args->fw == 0) {
         fprintf(stderr, "Specify a valid frame width.\n");
@@ -135,17 +146,27 @@ static bool ParseArgs(Args* args, int argc, char** argv)
         return false;
     }
 
+    if(args->packW > 0 && args->packH > 0 && args->pot) {
+        fprintf(stderr, "Cannot specify pack width and height and also power of two.\n");
+        return false;
+    }
+
+    if(args->packW > 0 && args->packH > 0 && args->dw > 0) {
+        fprintf(stderr, "Cannot specify pack width and height and also dest width.\n");
+        return false;
+    }
+
     if(args->pot && args->dw > 0) {
         fprintf(stderr, "Cannot specify both power of two and destination width.\n");
         return false;
     }
     
-    if(!args->pot && args->dw <= 0) {
+    if(args->packW == 0 && args->packH == 0 && !args->pot && args->dw <= 0) {
         fprintf(stderr, "Please specify either --pot or --dest-width.\n");
         return false;
     }
 
-    if (args->dw % args->fw != 0) {
+    if (args->fw > 0 && (args->dw > 0 && (args->dw % args->fw) != 0)) {
     	fprintf(stderr, "Dest width must be a multiple of frame width.\n");
     	return false;
     }
@@ -258,21 +279,23 @@ int main(int argc, char** argv)
     			}
 
     			checked[pt.x + pt.y * w] = true;
+        
+                if(!isBg) {
+                    if(pt.x < minX) {
+                        minX = pt.x;
+                    }
 
-                if(pt.x < minX) {
-                    minX = pt.x;
-                }
-
-                if(pt.y < minY) {
-                    minY = pt.y;
-                }
-                
-                if(pt.x > maxX) {
-                    maxX = pt.x;
-                }
-                
-                if(pt.y > maxY) {
-                    maxY = pt.y;
+                    if(pt.y < minY) {
+                        minY = pt.y;
+                    }
+                    
+                    if(pt.x > maxX) {
+                        maxX = pt.x;
+                    }
+                    
+                    if(pt.y > maxY) {
+                        maxY = pt.y;
+                    }
                 }
 
                 assert(numPoints < MAX_POINTS);
@@ -298,35 +321,71 @@ int main(int argc, char** argv)
 
     free(checked);
  
-    qsort(frames, numFrames, sizeof(Rect), CompareFrames);
+    if(args.packW == 0 && args.packH == 0) {
+        qsort(frames, numFrames, sizeof(Rect), CompareFrames);
+    }
 
     int dw;
     int dh;
 
-    if(args.pot) {
-        int reqArea = numFrames * fw * fh;
+    static stbrp_rect rects[MAX_FRAMES];
 
-        dw = fw;
-        dh = fh;
-     
-        while(dw * dh < reqArea) {
-            dw *= 2;
-            dh *= 2;
+    if(args.packW == 0 && args.packH == 0) {
+        if(args.pot) {
+            int reqArea = numFrames * fw * fh;
+
+            dw = fw;
+            dh = fh;
+         
+            while(dw * dh < reqArea) {
+                dw *= 2;
+                dh *= 2;
+            }
+        } else {
+            dw = args.dw;
+            dh = ((numFrames * fw) / dw + 1) * fh;
         }
     } else {
-        dw = args.dw;
-        dh = ((numFrames * fw) / dw + 1) * fh;
+        dw = args.packW;
+        dh = args.packH;
+
+        stbrp_context ctx;
+
+        stbrp_node* nodes = malloc(sizeof(stbrp_node) * dw);
+
+        stbrp_init_target(&ctx, dw, dh, nodes, dw);
+
+        for(int i = 0; i < numFrames; ++i) {
+            rects[i].w = frames[i].w;
+            rects[i].h = frames[i].h;
+        }
+
+        if(stbrp_pack_rects(&ctx, rects, numFrames) != 1) {
+            fprintf(stderr, "Failed to pack (some) rectangles. Try again with a different size or don't pack at all.\n");
+            return 1;
+        }
+
+        free(nodes);
+
+        // Output rectangle metadata
     }
     
-    int columns = dw / fw;
-
     unsigned char* dest = calloc(4, dw * dh);
 
     for(int i = 0; i < numFrames; ++i) {
         Rect r = frames[i];
 
-        int dx = (i % columns) * fw + fw / 2 - r.w / 2;
-        int dy = (i / columns) * fh + fh / 2 - r.h / 2;
+        int dx, dy;
+
+        if(args.packW == 0 && args.packH == 0) {
+			int columns = dw / fw;
+
+            dx = (i % columns) * fw + fw / 2 - r.w / 2;
+            dy = (i / columns) * fh + fh / 2 - r.h / 2;
+        } else {
+            dx = rects[i].x;
+            dy = rects[i].y;
+        }
 
         for(int y = 0; y < r.h; ++y) {
             for(int x = 0; x < r.w; ++x) {
