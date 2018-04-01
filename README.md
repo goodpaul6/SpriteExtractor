@@ -68,3 +68,8 @@ sprite_extractor example_images/player_zelda_src.png example_images/player_zelda
 
 Notice how the "wave arcs" are placed into single frames despite them being separated from each other by a certain amount.
 This occurs because of the edge distance threshold.
+
+## Note
+This does not pack the sprites optimally (or make an effort to do so at all, but I'm working on making that an option).
+This is designed so that the resulting sprite sheets are ready to use as-is, unlike tightly
+packed ones which would likely require generating/parsing a bunch of metadata.
