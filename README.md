@@ -9,6 +9,7 @@ Pre-built binaries are located in the downloads folder.
 * Absolutely no dependencies
 * Can optionally pack sprites tightly and generate appropriate metadata
 * Can label each frame with its index for easy visual lookup
+* Only processes/generates 4-component (RGBA) png files. (Yes, this is a feature)
 
 ## Build
 You can use CMake to build this with whatever you want, which means you'll need CMake.
