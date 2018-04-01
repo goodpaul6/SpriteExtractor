@@ -35,6 +35,7 @@ typedef struct
     const char* outputImage;
     int fw, fh;
     int maxDistFromEdge;
+	int minW, minH;
     bool pot;
     int dw;
 } Args;
@@ -47,7 +48,8 @@ static void PrintUsage(const char* app)
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "\t--frame-width DESIRED_FRAME_WIDTH\n\t\tDesired width of the frames\n");
     fprintf(stderr, "\t--frame-height DESIRED_FRAME_HEIGHT\n\t\tDesired height of the frames\n");
-    fprintf(stderr, "\t-e EDGE_DISTANCE_THRESHOLD\n\t\tThe edge distance threshold is used to determine whether disconnected pixels still belong to a frame.\n\t\tIf the distance from these pixels to the nearest edge is less than or equal to the\n\t\tthreshold, then they're incorporated.\n");
+    fprintf(stderr, "\t-e EDGE_DISTANCE_THRESHOLD\n\t\tThe edge distance threshold is used to determine whether disconnected pixels still belongs to a frame.\n\t\tIf the distance from these pixels to the nearest edge is less than or equal to the\n\t\tthreshold, then they're incorporated.\n");
+    fprintf(stderr, "\t--min-width MIN_FRAME_WIDTH\n\t--min-height MIN_FRAME_HEIGHT\n\t\tAll frames smaller than these in both dimensions will be discarded.\n\t\tBy default these are frame width / 4 and frame height / 4.\n");
     fprintf(stderr, "\t--pot\n\t\tThis is optional. It makes the app generate a power of two image.\n");
     fprintf(stderr, "\t--dest-width DESIRED_OUTPUT_IMAGE_WIDTH\n\t\tThis is optional and mutually exclusive with the --pot option.\n\t\tThis is the width you want the output image to be.\n\t\tThe height will be determined from the number of frames detected.\n");
 	fprintf(stderr, "\t--row-thresh DESIRED_ROW_THRESHOLD\n\t\tThis is equal to half the frame height by default.\n\t\tIt is used to order the resulting frames. If two frames are within the threshold on the y axis\n\t\tthen they are ordered from left-to-right next to each other in the final image.\n");
@@ -65,6 +67,8 @@ static bool ParseArgs(Args* args, int argc, char** argv)
     args->outputImage = NULL;
     args->fw = 0;
     args->fh = 0;
+	args->minW = 0;
+	args->minH = 0;
     args->maxDistFromEdge = 0;
     args->pot = false;
     args->dw = 0;
@@ -79,7 +83,13 @@ static bool ParseArgs(Args* args, int argc, char** argv)
         } else if(strcmp(argv[i], "--frame-height") == 0) {
             args->fh = atoi(argv[i + 1]);
             i += 1;
-        } else if(strcmp(argv[i], "--dest-width") == 0) {
+		} else if (strcmp(argv[i], "--min-width") == 0) {
+			args->minW = atoi(argv[i + 1]);
+			i += 1;
+		} else if (strcmp(argv[i], "--min-height") == 0) {
+			args->minH = atoi(argv[i + 1]);
+			i += 1;
+		} else if (strcmp(argv[i], "--dest-width") == 0) {
             args->dw = atoi(argv[i + 1]);
             i += 1;
         } else if(strcmp(argv[i], "-e") == 0) {
@@ -139,6 +149,14 @@ static bool ParseArgs(Args* args, int argc, char** argv)
     	fprintf(stderr, "Dest width must be a multiple of frame width.\n");
     	return false;
     }
+
+	if (args->minW == 0) {
+		args->minW = args->fw / 4;
+	}
+
+	if (args->minH == 0) {
+		args->minH = args->fh / 4;
+	}
 
 	if (CompareFramesRowThresh == 0) {
 		CompareFramesRowThresh = args->fh / 2;
@@ -267,7 +285,7 @@ int main(int argc, char** argv)
 
             Rect r = { minX, minY, maxX - minX + 1, maxY - minY + 1 };
 
-    		if (r.w < fw / 4 && r.h < fh / 4) {
+    		if (r.w < args.minW && r.h < args.minH) {
     			fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too small so I'm skipping it.\n", r.x, r.y, r.w, r.h);
     		} else if(r.w > fw) {
                 fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too large to fit in a single frame so I'm skipping it.\n", r.x, r.y, r.w, r.h);
