@@ -10,7 +10,8 @@ Pre-built binaries are located in the downloads folder.
 * Label each frame with its index for easy visual lookup
 * Process entire directories of images (recursively) all at once
 * Absolutely no dependencies
-* Only processes/generates 4-component (RGBA) png files. (Yes, this is a feature)
+* Can process PNG, BMP, TGA, GIF, HDR, JPEG (baseline and progressive) via stb\_image.h
+* Always generates 4-component PNG images (Yes, this is a feature)
 
 ## Build
 You can use CMake to build this with whatever you want, which means you'll need CMake.
