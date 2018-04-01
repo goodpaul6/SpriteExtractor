@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#define MAX_FRAMES 2048
+#define MAX_FRAMES 4096
 #define MAX_POINTS 100000
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -15,16 +15,23 @@
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb_rect_pack.h"
 
-typedef struct
-{
-    int x, y;
-    int w, h;
-} Rect;
+#define TINYFILES_IMPLEMENTATION
+#include "tinyfiles.h"
 
 typedef struct
 {
     unsigned char r, g, b, a;
 } Pixel;
+
+typedef struct
+{
+    unsigned char* src;
+	int sw, sh;
+	Pixel bg;
+
+    int x, y;
+    int w, h;
+} Rect;
 
 typedef struct
 {
@@ -34,6 +41,7 @@ typedef struct
 
 typedef struct
 {
+    bool isDir;
     const char* inputImage;
     const char* outputImage;
     int fw, fh;
@@ -141,8 +149,9 @@ static int CompareFramesRowThresh;
 
 static void PrintUsage(const char* app)
 {
-    fprintf(stderr, "Usage: %s path/to/input/image path/to/output/image OPTIONS\n", app);
+    fprintf(stderr, "Usage: %s (path/to/input/image or directory of images) path/to/output/image OPTIONS\n", app);
     fprintf(stderr, "Options:\n");
+    fprintf(stderr, "\t--dir\n\t\tThis must be specified if you supplied a directory of images instead of a single file.\n");
     fprintf(stderr, "\t--frame-width DESIRED_FRAME_WIDTH\n\t\tDesired width of the frames.\n");
     fprintf(stderr, "\t--frame-height DESIRED_FRAME_HEIGHT\n\t\tDesired height of the frames.\n");
     fprintf(stderr, "\t-e EDGE_DISTANCE_THRESHOLD\n\t\tThe edge distance threshold is used to determine whether disconnected pixels still belongs to a frame.\n\t\tIf the distance from these pixels to the nearest edge is less than or equal to the\n\t\tthreshold, then they're incorporated.\n");
@@ -169,6 +178,8 @@ static bool ParseArgs(Args* args, int argc, char** argv)
         if(strcmp(argv[i], "-h") == 0) {
             PrintUsage(argv[0]);
             return false;
+        } else if(strcmp(argv[i], "--dir") == 0) {
+            args->isDir = true;
         } else if(strcmp(argv[i], "--frame-width") == 0) {
             args->fw = atoi(argv[i + 1]);
             i += 1;
@@ -314,34 +325,32 @@ static int CompareFrames(const void* va, const void* vb)
     return a->y - b->y;
 }
 
-int main(int argc, char** argv)
+static int NumFrames = 0;
+static Rect Frames[MAX_FRAMES];
+
+static void ExtractFrames(const char* filename, const Args* args)
 {
-    Args args;
-
-    if(!ParseArgs(&args, argc, argv)) {
-        return 1;
-    }
-
-    int fw = args.fw;
-    int fh = args.fh;
-    int maxDistFromEdge = args.maxDistFromEdge;
-
     int w, h, n;
-    unsigned char* src = stbi_load(args.inputImage, &w, &h, &n, 4);
+    unsigned char* src = stbi_load(filename, &w, &h, &n, 4);
 
     if(!src) {
-        fprintf(stderr, "Failed to load image '%s': %s\n", args.inputImage, stbi_failure_reason());
-        return 1;
+        fprintf(stderr, "Failed to load image '%s': %s\n", filename, stbi_failure_reason());
+		if (args->isDir) {
+			fprintf(stderr, "Skipping...\n");
+		}
+		return;
     }
-    
+
+    int fw = args->fw;
+    int fh = args->fh;
+    int maxDistFromEdge = args->maxDistFromEdge;
+
     // Top left pixel is bg color
     const Pixel* bg = (Pixel*)src;
 
+    printf("Processing image '%s'...\n", filename);
     printf("image size: %d, %d\n", w, h);
     printf("bg: %d %d %d %d\n", bg->r, bg->g, bg->b, bg->a);
-
-    int numFrames = 0;
-    static Rect frames[MAX_FRAMES];
 
     bool* checked = calloc(sizeof(bool), w * h);
 
@@ -413,22 +422,47 @@ int main(int argc, char** argv)
                 points[numPoints++] = (Point){pt.x, pt.y + 1, newDistFromEdge};
             }
 
-            Rect r = { minX, minY, maxX - minX + 1, maxY - minY + 1 };
+            Rect r = { src, w, h, *bg, minX, minY, maxX - minX + 1, maxY - minY + 1 };
 
-    		if (r.w < args.minW && r.h < args.minH) {
+    		if (r.w < args->minW && r.h < args->minH) {
     			fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too small so I'm skipping it.\n", r.x, r.y, r.w, r.h);
     		} else if(r.w > fw) {
                 fprintf(stderr, "Found rect (%d,%d,%d,%d) but it's too large to fit in a single frame so I'm skipping it.\n", r.x, r.y, r.w, r.h);
             } else {
-                assert(numFrames < MAX_FRAMES);
-                frames[numFrames++] = r;
+                assert(NumFrames < MAX_FRAMES);
+                Frames[NumFrames++] = r;
             }
         }
     }
 
     free(checked);
+}
+
+static void TraverseImages(tfFILE* file, void* data)
+{
+	ExtractFrames(file->path, data);
+}
+
+int main(int argc, char** argv)
+{
+    Args args;
+
+    if(!ParseArgs(&args, argc, argv)) {
+        return 1;
+    }
+
+    if(args.isDir) {
+		tfTraverse(args.inputImage, TraverseImages, &args);
+    } else {
+        ExtractFrames(args.inputImage, &args);
+    }
+
+    if(NumFrames == 0) {
+        fprintf(stderr, "I found no frames. Are you sure you supplied the correct input?\n");
+        return 1;
+    }
  
-    qsort(frames, numFrames, sizeof(Rect), CompareFrames);
+    qsort(Frames, NumFrames, sizeof(Rect), CompareFrames);
 
     int dw;
     int dh;
@@ -437,10 +471,10 @@ int main(int argc, char** argv)
 
     if(args.packW == 0 && args.packH == 0) {
         if(args.pot) {
-            int reqArea = numFrames * fw * fh;
+            int reqArea = NumFrames * args.fw * args.fh;
 
-            dw = fw;
-            dh = fh;
+            dw = args.fw;
+            dh = args.fh;
          
             while(dw * dh < reqArea) {
                 dw *= 2;
@@ -448,7 +482,7 @@ int main(int argc, char** argv)
             }
         } else {
             dw = args.dw;
-            dh = ((numFrames * fw) / dw + 1) * fh;
+            dh = ((NumFrames * args.fw) / dw + 1) * args.fh;
         }
     } else {
         dw = args.packW;
@@ -460,12 +494,12 @@ int main(int argc, char** argv)
 
         stbrp_init_target(&ctx, dw, dh, nodes, dw);
 
-        for(int i = 0; i < numFrames; ++i) {
-            rects[i].w = frames[i].w;
-            rects[i].h = frames[i].h;
+        for(int i = 0; i < NumFrames; ++i) {
+            rects[i].w = Frames[i].w;
+            rects[i].h = Frames[i].h;
         }
 
-        if(stbrp_pack_rects(&ctx, rects, numFrames) != 1) {
+        if(stbrp_pack_rects(&ctx, rects, NumFrames) != 1) {
             fprintf(stderr, "Failed to pack (some) rectangles. Try again with a different size or don't pack at all.\n");
             return 1;
         }
@@ -502,18 +536,18 @@ int main(int argc, char** argv)
 			return 1;
 		}
 
-		fprintf(file, "%d\n", numFrames);
+		fprintf(file, "%d\n", NumFrames);
 
-		for (int i = 0; i < numFrames; ++i) {
+		for (int i = 0; i < NumFrames; ++i) {
             if(args.packW > 0 && args.packH > 0) {
                 fprintf(file, "%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
             } else {
-				int columns = dw / fw;
+				int columns = dw / args.fw;
 
-				int dx = (i % columns) * fw;
-				int dy = (i / columns) * fh;
+				int dx = (i % columns) * args.fw;
+				int dy = (i / columns) * args.fh;
 
-                fprintf(file, "%d %d %d %d\n", dx, dy, fw, fh);
+                fprintf(file, "%d %d %d %d\n", dx, dy, args.fw, args.fh);
             }
 		}
 
@@ -523,10 +557,13 @@ int main(int argc, char** argv)
     
     unsigned char* dest = calloc(4, dw * dh);
 
-    for(int i = 0; i < numFrames; ++i) {
-        Rect r = frames[i];
+    for(int i = 0; i < NumFrames; ++i) {
+        Rect r = Frames[i];
 
         int dx, dy;
+
+		int fw = args.fw;
+		int fh = args.fh;
 
         if(args.packW == 0 && args.packH == 0) {
 			int columns = dw / fw;
@@ -540,9 +577,9 @@ int main(int argc, char** argv)
 
         for(int y = 0; y < r.h; ++y) {
             for(int x = 0; x < r.w; ++x) {
-                Pixel sp = *(Pixel*)(&src[((x + r.x) * 4) + (y + r.y) * (w * 4)]);
+                Pixel sp = *(Pixel*)(&r.src[((x + r.x) * 4) + (y + r.y) * (r.sw * 4)]);
 
-                if(PixelEqual(&sp, bg)) continue;
+                if(PixelEqual(&sp, &r.bg)) continue;
                 
                 *(Pixel*)(&dest[(dx + x) * 4 + (y + dy) * (dw * 4)]) = sp; 
             }
@@ -568,7 +605,7 @@ int main(int argc, char** argv)
 		}
     }
 
-    if(stbi_write_png(argv[2], dw, dh, 4, dest, dw * 4) == 0) {
+    if(stbi_write_png(args.outputImage, dw, dh, 4, dest, dw * 4) == 0) {
         fprintf(stderr, "Failed to write file.\n");
     } else {
         printf("Succeeded.\n");
